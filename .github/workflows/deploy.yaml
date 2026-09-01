@@ -57,9 +57,12 @@ jobs:
 
   # Development gets the new code on the instances straight away; QA and
   # Production are rolled by dispatching rolling_updates.yaml by hand.
+  # Gated on ENABLE_ROLLING_UPDATE: until the fam-metadata-editor-iac stack
+  # exists there is nothing to roll, and update-stack would fail the run right
+  # after a successful upload. Set the variable to 'true' once it is deployed.
   rolling-update:
     needs: deploy
-    if: github.ref_name == 'fao-master-dev'
+    if: github.ref_name == 'fao-master-dev' && vars.ENABLE_ROLLING_UPDATE == 'true'
     uses: ./.github/workflows/rolling_updates.yaml
     permissions:
       id-token: write
