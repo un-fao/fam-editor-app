@@ -1,0 +1,46 @@
+name: Trigger Rolling Update
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  rolling-update:
+    runs-on: ubuntu-24.04
+    environment: ${{ github.ref_name == 'fao-master-prod' && 'production' || github.ref_name == 'fao-master-qa' && 'qa' || 'development' }}
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    env:
+      ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.DEPLOY_ROLE }}
+          role-session-name: GithubActionsSession
+
+      - name: Rolling update (PHP)
+        run: |
+          CURRENT_EPOCH=$(date +%s)
+          echo "Triggering PHP rolling update: $CURRENT_EPOCH"
+          # The stack carries a toggle per component. Parameters left out of an
+          # --use-previous-template call fall back to the template default, so the
+          # FastAPI toggle is pinned explicitly to avoid recycling that fleet too.
+          aws cloudformation update-stack \
+            --stack-name "${{ vars.APPLICATION_NAME }}-iac" \
+            --parameters \
+              ParameterKey=ToggleToTriggerRollingUpdatePhp,ParameterValue=$CURRENT_EPOCH \
+              ParameterKey=ToggleToTriggerRollingUpdateFastapi,UsePreviousValue=true \
+            --use-previous-template \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --region "${{ vars.AWS_REGION }}"
+
+      - name: Create Issue
+        if: failure()
+        uses: un-fao/fao-ga-create-issue@v2

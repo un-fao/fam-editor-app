@@ -1,0 +1,67 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - fao-master-dev
+      - fao-master-qa
+      - fao-master-prod
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ${{ github.ref_name == 'fao-master-prod' && 'production' || github.ref_name == 'fao-master-qa' && 'qa' || 'development' }}
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    env:
+      ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.DEPLOY_ROLE }}
+          role-session-name: GithubActionsSession
+
+      - name: Package application
+        run: |
+          # conf/user-data-php.sh unpacks the archive into /var/www/html/, so it
+          # must carry a top-level editor/ directory (unlike fam-catalogue's flat
+          # html.zip, which is unpacked straight into the document root).
+          mkdir -p "${RUNNER_TEMP}/stage/editor"
+          rsync -a --exclude-from=.deployignore ./ "${RUNNER_TEMP}/stage/editor/"
+          cd "${RUNNER_TEMP}/stage"
+          zip -qr "${RUNNER_TEMP}/editor.zip" editor
+          echo "Archive contents (top level):"
+          zipinfo -1 "${RUNNER_TEMP}/editor.zip" | cut -d/ -f1-2 | sort -u | head -40
+          du -h "${RUNNER_TEMP}/editor.zip"
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp "${RUNNER_TEMP}/editor.zip" \
+            "s3://${{ vars.AWS_S3_BUCKET }}/${{ vars.APPLICATION_NAME }}/${{ vars.ENVIRONMENT }}/editor.zip" \
+            --only-show-errors
+
+      - name: Create Issue
+        if: failure()
+        uses: un-fao/fao-ga-create-issue@v2
+
+  # Development gets the new code on the instances straight away; QA and
+  # Production are rolled by dispatching rolling_updates.yaml by hand.
+  rolling-update:
+    needs: deploy
+    if: github.ref_name == 'fao-master-dev'
+    uses: ./.github/workflows/rolling_updates.yaml
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
