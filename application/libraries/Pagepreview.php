@@ -13,18 +13,19 @@ class Pagepreview{
     private $ci;
     private $metadata;
     private $template;
+    public $pdf_mode = false;
 	
 	function __construct()
 	{
         $this->ci =& get_instance();
         $this->ci->load->helper("array");
-        $this->ci->load->model("Editor_template_model");
     }
 
-    function initialize($metadata,$template)
+    function initialize($metadata,$template,$pdf_mode=false)
     {
         $this->metadata=$metadata;
         $this->template=$template;
+        $this->pdf_mode = (bool)$pdf_mode;
     }
 
     function render_html()
@@ -59,11 +60,18 @@ class Pagepreview{
                 case 'string':
                 case 'boolean':
                 case 'integer':
+                case 'number':
+                case 'date':
+                case 'textarea':
+                case 'dropdown':
+                case 'dropdown-custom':
                     $output[]= $this->render_text($item);
                     break;
 
                 default:
-                    throw new Exception("not supported: ". $item['type']);
+                    // Display widgets and unknown scalar types must not abort PDF/HTML export
+                    $output[]= $this->render_text($item);
+                    break;
             }
         }
 
@@ -115,7 +123,11 @@ class Pagepreview{
             return false;
         }
 
-        return $this->ci->load->view('project_preview/fields/field_array_accordion',array('data'=>$value,'template'=>$item),true);
+        return $this->ci->load->view('project_preview/fields/field_array_accordion',array(
+            'data'=>$value,
+            'template'=>$item,
+            'pdf_mode'=>$this->pdf_mode
+        ),true);
     }
 
     private function render_array($item)
@@ -126,7 +138,11 @@ class Pagepreview{
             return false;
         }
 
-        return $this->ci->load->view('project_preview/fields/field_array',array('data'=>$value,'template'=>$item),true);
+        return $this->ci->load->view('project_preview/fields/field_array',array(
+            'data'=>$value,
+            'template'=>$item,
+            'pdf_mode'=>$this->pdf_mode
+        ),true);
     }
 
     private function render_simple_array($item)
@@ -137,7 +153,11 @@ class Pagepreview{
             return false;
         }
 
-        return $this->ci->load->view('project_preview/fields/field_simple_array',array('data'=>$value,'template'=>$item),true);
+        return $this->ci->load->view('project_preview/fields/field_simple_array',array(
+            'data'=>$value,
+            'template'=>$item,
+            'pdf_mode'=>$this->pdf_mode
+        ),true);
     }
     
     private function render_text($item)
@@ -148,7 +168,11 @@ class Pagepreview{
             return false;
         }
 
-        return $this->ci->load->view('project_preview/fields/field_text',array('data'=>$value,'template'=>$item),true);
+        return $this->ci->load->view('project_preview/fields/field_text',array(
+            'data'=>$value,
+            'template'=>$item,
+            'pdf_mode'=>$this->pdf_mode
+        ),true);
     }
 
 
@@ -156,38 +180,6 @@ class Pagepreview{
     {
         return 'metadata.'.str_replace("/",".",$key);
     }
-
-
-    function get_template_project_type($type)
-	{
-		/*$user_template=$this->Editor_template_model->get_template_by_uid($uid);
-
-		if(!$user_template){
-			show_error("Template not found");
-		}
-
-		return $user_template;*/
-
-        $template_file_name='application/templates/display/'.$type.'_display_template.json';
-
-		if (file_exists($template_file_name)){
-			$template['template']=json_decode(file_get_contents($template_file_name),true);
-			return $template;
-		}
-
-		$core_templates=$this->ci->Editor_template_model->get_core_templates_by_type($type);
-
-		if (!$core_templates){
-			throw new Exception("No system templates found for type: "); 
-		}
-
-		//var_dump($core_templates);
-		//die();
-
-		$core_template=$this->ci->Editor_template_model->get_template_by_uid($core_templates[0]["uid"]);
-
-		return $core_template;
-	}
 
     
 }

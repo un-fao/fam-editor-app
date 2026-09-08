@@ -60,7 +60,20 @@ class Project_json_writer
 			throw new Exception("Data file not found: " . $file_id);
 		}
 
-		$exclude_fields = array('id', 'sid', 'file_physical_name', 'store_data', 'created', 'changed', 'created_by', 'changed_by');
+		$exclude_fields = array(
+			'id',
+			'sid',
+			'file_physical_name',
+			'store_data',
+			'source_status',
+			'source_upload_filename',
+			'source_attached_at',
+			'source_attached_by',
+			'created',
+			'changed',
+			'created_by',
+			'changed_by'
+		);
 		foreach ($exclude_fields as $field) {
 			if (array_key_exists($field, $datafile)) {
 				unset($datafile[$field]);
@@ -287,12 +300,13 @@ class Project_json_writer
 				};
 			}
 
-			/*$output['variable_groups'] = function () use ($sid) {
-				$var_groups=$this->Variable_group_model->select_all($sid);
-				foreach($var_groups as $var_group){
-					yield $var_group;
-				}			
-			};*/
+			if ($this->uid_vid_cache === null) {
+				$this->uid_vid_cache = $this->ci->Editor_variable_model->uid_vid_list($sid);
+			}
+			$this->ci->load->model('Editor_variable_groups_model');
+			$this->ci->load->library('Variable_groups_tree');
+			$tree = $this->ci->Editor_variable_groups_model->select_all($sid);
+			$output['variable_groups'] = Variable_groups_tree::flatten_for_export($tree, $this->uid_vid_cache);
 		}
 		
 		if($project['type']=='geospatial'){

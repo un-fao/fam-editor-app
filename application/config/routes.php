@@ -97,6 +97,10 @@ $route['api/editor/versions/(.*)'] = "api/versions/$1";
 $route['api/editor/compare'] = "api/compare";
 $route['api/editor/compare/(.*)'] = "api/compare/$1";
 
+// Core schema JSON + dynamic OpenAPI YAML for ReDoc (application/schemas/)
+$route['openapi_schema/(:any)'] = 'schema_openapi/serve/$1';
+$route['openapi_spec'] = 'schema_openapi/spec';
+
 //schemas page
 $route['schemas'] = "schemas/index";
 $route['schemas/preview/(:any)'] = "schemas/preview/$1";
@@ -108,6 +112,35 @@ $route['api/schemas/openapi/(:any)'] = "api/schemas/openapi/$1";
 $route['api/schemas/compiled_schema/(:any)'] = "api/schemas/compiled_schema/$1";
 $route['api/schemas/fields/(:any)'] = "api/schemas/fields/$1";
 $route['api/schemas/regenerate_template/(:any)'] = "api/schemas/regenerate_template/$1";
+
+// Curator publishing hub (queue + history)
+$route['publish-queue'] = 'publish_queue/index';
+$route['publish_queue'] = 'publish_queue/index';
+$route['publish_ready'] = 'publish_queue/index';
+
+// Publish requests API (lifecycle); hyphen alias mirrors publish-queue page style
+$route['api/publish_requests/intake_form'] = 'api/publish_requests/intake_form';
+$route['api/publish_requests/queue/history'] = 'api/publish_requests/queue_history';
+$route['api/publish_requests/queue'] = 'api/publish_requests/queue';
+$route['api/publish_requests/resolve_batch'] = 'api/publish_requests/resolve_batch';
+$route['api/publish_requests/project/(:num)/context'] = 'api/publish_requests/project_context/$1';
+$route['api/publish_requests/project/(:num)/history/(:num)/delete'] = 'api/publish_requests/project_history_delete/$1/$2';
+$route['api/publish_requests/project/(:num)/history/(:num)'] = 'api/publish_requests/project_history/$1/$2';
+$route['api/publish_requests/project/(:num)/history'] = 'api/publish_requests/project_history/$1';
+$route['api/publish_requests/project/(:num)/clear'] = 'api/publish_requests/project_clear/$1';
+$route['api/publish_requests/project/(:num)/submit'] = 'api/publish_requests/project_submit/$1';
+$route['api/publish_requests/project/(:num)/withdraw'] = 'api/publish_requests/project_withdraw/$1';
+$route['api/publish_requests/project/(:num)'] = 'api/publish_requests/project/$1';
+$route['api/publish_requests/(:num)/resolve'] = 'api/publish_requests/resolve/$1';
+$route['api/publish_requests/(:num)'] = 'api/publish_requests/placement/$1';
+$route['api/publish-requests/(.*)'] = 'api/publish_requests/$1';
+
+// In-app notifications inbox
+$route['notifications'] = 'notifications/index';
+$route['api/notifications/unread_count'] = 'api/notifications/unread_count';
+$route['api/notifications/read_all'] = 'api/notifications/read_all';
+$route['api/notifications/(:num)/read'] = 'api/notifications/read/$1';
+$route['api/notifications/(:num)'] = 'api/notifications/index/$1';
 
 //tags page
 $route['tags'] = 'tags/index';

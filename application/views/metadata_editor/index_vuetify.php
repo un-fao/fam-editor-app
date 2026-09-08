@@ -14,50 +14,23 @@
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="<?php echo base_url();?>vue-app/assets/leaflet.css" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
-  <style>[v-cloak]{display:none !important;}</style>
+  <style>[v-cloak]{display:none !important;}
+  .global-registry-scalar-field-input--picker input,
+  .global-registry-scalar-field-input--picker .v-input__slot { cursor: pointer; }
+  /* Clear, then picker, then issues — dots stay rightmost inside the field */
+  .global-registry-scalar-field-input .v-input__append-inner {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+  .global-registry-scalar-field-input--picker .v-input__append-inner .v-input__icon--clear {
+    order: 1;
+  }
+  .global-registry-scalar-field-input .v-input__append-inner > span.d-inline-flex {
+    order: 2;
+  }
+  </style>
 </head>
-
-<?php
-  //break template into smaller templates by spliting template ['items']
-  $template_parts=array();
-  
-  //update template_parts
-  //get_template_part($metadata_template_arr['items'],$template_parts);
-
-  function get_template_part($items,&$output)
-  {
-    foreach($items as $item){
-      if (isset($item['items'])){
-        get_template_part($item['items'],$output);
-      }
-      if (isset($item['key'])){
-        $output[$item['key']]=$item;
-      }
-    }
-  } 
-
-  $template_keys = array();
-  if (is_array($metadata_template_arr)
-    && isset($metadata_template_arr['items'])
-    && is_array($metadata_template_arr['items'])) {
-    get_template_keys($metadata_template_arr['items'],$template_keys);
-  }
-  function get_template_keys($items,&$output)
-  {
-    foreach($items as $item){
-      if (isset($item['items'])){
-        get_template_keys($item['items'],$output);
-      }
-      if (!isset($item['type'])){
-        $item['type']='string';
-      }
-      if (isset($item['key']) && $item['type']!='section' ){
-        $output[]=$item['key'];
-      }
-    }        
-  }
-  
-?>
 
 <body class="hold-transition sidebar-mini layout-fixed">
 
@@ -66,13 +39,14 @@
       $user=$this->session->userdata('username');
       $this->load->helper('user_access');
 
-      $user_info=[
+      $user_info=array_merge(array(
         'username'=> $user,
         'is_logged_in'=> !empty($user),
         'is_admin'=> $this->ion_auth->is_admin(),
         'can_access_site_admin'=> $this->ion_auth->can_access_site_admin(),
+        'can_access_admin_dashboard'=> $this->ion_auth->can_access_admin_dashboard(),
         'metadata_assessment_enabled'=> metadata_assessment_enabled(),
-      ];
+      ), site_features_user_info());
       
     ?>
 
@@ -84,9 +58,7 @@
           'user_info': <?php echo json_encode($user_info); ?>
         }; 
         let sid='<?php echo $sid;?>';
-        let form_template=<?php echo $metadata_template;?>;
-        let form_template_parts= <?php echo json_encode($template_parts,JSON_PRETTY_PRINT); ?>;
-        var template_structure_valid=<?php echo (!isset($template_structure_valid) || $template_structure_valid) ? 'true' : 'false'; ?>;
+        let project_template_uid=<?php echo json_encode(isset($template_uid) ? $template_uid : ''); ?>;
     </script>
 
   <div id="app" data-app>
@@ -252,6 +224,8 @@
         await this.$store.dispatch('initData',{dataset_id:this.dataset_id});
         await this.$store.dispatch('initTreeItems');
         this.init_tree_data();
+        await this.$store.dispatch('syncActiveNodeFromRoute', this.$route);
+        this.$store.state.app_bootstrap_complete = true;
 
         let vm=this;
 
@@ -291,6 +265,9 @@
         },
         UserHasEditAccess(){
           return this.$store.state.user_has_edit_access && !this.$store.state.project_is_locked;
+        },
+        issuesFeatureEnabled(){
+          return !(CI && CI.user_info && CI.user_info.issues_enabled === false);
         },
         ProjectIsLocked(){
           return this.$store.state.project_is_locked;
@@ -560,6 +537,9 @@
         },
         $route(to, from) {
           this.setTreeActiveNode(to.path);
+          if (to.path.startsWith('/study/')) {
+            this.$store.dispatch('syncActiveNodeFromRoute', to);
+          }
         },
         ProjectMetadata: 
         {
@@ -582,6 +562,18 @@
         }
       },
       methods:{
+        projectEditorTemplateRoot: function() {
+          if (typeof EditorProjectModulesUtil === 'undefined') {
+            return null;
+          }
+          return EditorProjectModulesUtil.getTemplateRootFromFormTemplate(this.$store.state.formTemplate);
+        },
+        isProjectModuleVisible: function(moduleId) {
+          if (typeof EditorProjectModulesUtil === 'undefined') {
+            return true;
+          }
+          return EditorProjectModulesUtil.isModuleVisible(this.projectEditorTemplateRoot(), moduleId);
+        },
         loadSchemaCoreMappings: function(){
           if (!this.dataset_type){
             this.schema_core_fields = { idno:[], title:[] };
@@ -955,21 +947,24 @@
           }
 
           if (this.dataset_type=='geospatial'){
-            tree_data.push({
-              title: this.$t('feature_catalogue'),
-              type: 'geospatial-features',
-              file: 'database',
-              key:'feature-catalogue',
-              items:this.GeospatialFeatures
-            });
+            if (this.isProjectModuleVisible('feature_catalogue')) {
+              tree_data.push({
+                title: this.$t('feature_catalogue'),
+                type: 'geospatial-features',
+                file: 'database',
+                key:'feature-catalogue',
+                items:this.GeospatialFeatures
+              });
+            }
 
-            tree_data.push({
-              title: this.$t('image_gallery'),
-              type: 'geospatial-gallery',
-              file: 'database',
-              key:'geospatial-gallery'
-            });
-
+            if (this.isProjectModuleVisible('geospatial_gallery')) {
+              tree_data.push({
+                title: this.$t('image_gallery'),
+                type: 'geospatial-gallery',
+                file: 'database',
+                key:'geospatial-gallery'
+              });
+            }
           }
 
           if (this.dataset_type=='indicator' || this.dataset_type=='timeseries'){
