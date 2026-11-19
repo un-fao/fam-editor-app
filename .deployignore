@@ -1,0 +1,19 @@
+# Paths excluded from editor.zip (rsync --exclude-from, see .github/workflows/deploy.yaml)
+
+# Repository plumbing — not part of the deployed application
+/.git/
+/.github/
+/.gitignore
+/.deployignore
+/tests/
+
+# Mounted from EFS by conf/user-data-php.sh *before* the archive is unpacked.
+# Shipping the tracked placeholders here would write them onto shared storage.
+/application/logs/
+/imports/
+/datafiles/
+
+# Local noise
+.DS_Store
+*.bak
+/.idea/

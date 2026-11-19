@@ -1,0 +1,68 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - fao-master-dev
+      - fao-master-qa
+      - fao-master-prod
+
+concurrency:
+  group: pr-checks-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          # Matches the runtime installed by conf/user-data-php.sh
+          php-version: '8.3'
+
+      - name: Guard against environment-specific config
+        run: |
+          # These live in .gitignore and are delivered per environment by
+          # fam-editor-iac; committing them would ship one environment's
+          # credentials to all three.
+          BLOCKED='application/config/database.php application/config/email.php application/config/auth_oidc.php'
+          CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          rc=0
+          for f in $BLOCKED; do
+            if echo "$CHANGED" | grep -qx "$f"; then
+              echo "::error file=$f::$f is environment-specific and must not be committed"
+              rc=1
+            fi
+          done
+          exit $rc
+
+      - name: Lint changed PHP files
+        run: |
+          CHANGED=$(git diff --name-only --diff-filter=d "origin/${{ github.base_ref }}...HEAD" -- '*.php' \
+            | grep -Ev '^(vendor|system|modules/[^/]+/vendor)/' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No application PHP files changed"
+            exit 0
+          fi
+          echo "$CHANGED"
+          echo "$CHANGED" | xargs -r -n1 php -l
+
+      - name: Validate composer manifest
+        run: composer validate --no-check-publish
+
+      - name: Run tests
+        run: |
+          status=0
+          for t in tests/*_test.php; do
+            echo "── $t"
+            php "$t" || status=1
+          done
+          exit $status

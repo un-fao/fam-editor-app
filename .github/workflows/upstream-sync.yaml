@@ -1,0 +1,63 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          # A PAT is preferred: pull_request workflows are not triggered by PRs
+          # opened with GITHUB_TOKEN, so PR Checks would not run on the sync PR.
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Fast-forward main from upstream
+        id: ff
+        run: |
+          git config user.name 'fao-upstream-sync'
+          git config user.email 'noreply@fao.org'
+          git remote add upstream https://github.com/worldbank/metadata-editor.git
+          git fetch upstream main --tags
+          BEFORE=$(git rev-parse HEAD)
+          # Fails loudly if main ever stops being a clean mirror of upstream.
+          git merge --ff-only upstream/main
+          AFTER=$(git rev-parse HEAD)
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'main is already up to date with upstream'
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            git push origin main --tags
+            git log --oneline "$BEFORE..$AFTER"
+          fi
+
+      - name: Open promotion PR into fao-master-dev
+        if: steps.ff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          OPEN=$(gh pr list --base fao-master-dev --head main --state open --json number --jq '.[].number')
+          if [ -n "$OPEN" ]; then
+            echo "Sync PR #$OPEN is already open"
+            exit 0
+          fi
+          gh pr create \
+            --base fao-master-dev \
+            --head main \
+            --title 'Sync upstream worldbank/metadata-editor' \
+            --body 'Automated fast-forward of `main` from upstream. Review the incoming changes before merging into `fao-master-dev`.'
+
+      - name: Create Issue
+        if: failure()
+        uses: un-fao/fao-ga-create-issue@v2
