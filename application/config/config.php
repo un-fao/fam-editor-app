@@ -625,7 +625,8 @@ $config['fb_catalog_image']='images/nada-logo.gif';
 | Enable or disable fulltext searching for Microsoft SQLSRV database
 */
 $config['sqlsrv_use_fulltext']=TRUE;
-$config['site_user_register']='yes';
+// Closed: accounts are created by an administrator. A row in the configurations table overrides this.
+$config['site_user_register']='no';
 
 /*
 |--------------------------------------------------------------------------
